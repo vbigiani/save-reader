@@ -1,0 +1,49 @@
+BACKUP ~save-reader/backup~
+AUTHOR ~https://github.com/vbigiani/save-reader/issues~
+
+VERSION ~1.0~
+
+BEGIN ~Dump save information~
+NO_LOG_RECORD
+MKDIR "%SAVE_DIRECTORY%"
+GET_DIRECTORY_ARRAY saveDirs "%SAVE_DIRECTORY%" ~~
+
+MKDIR "%MPSAVE_DIRECTORY%"
+GET_DIRECTORY_ARRAY mpsaveDirs "%MPSAVE_DIRECTORY%" ~~
+
+OUTER_SET ok = 0
+
+OUTER_WHILE !ok BEGIN
+	OUTER_SET idx = 1
+
+	PRINT ~0 => Abort installation~
+
+	ACTION_PHP_EACH saveDirs AS i => dir BEGIN
+		PRINT ~%idx% -> %dir%~
+		OUTER_TEXT_SPRINT $srch(~%idx%~) ~%dir%~
+		OUTER_SET idx += 1
+	END
+
+	ACTION_PHP_EACH mpsaveDirs AS i => dir BEGIN
+		PRINT ~%idx% -> %dir%~
+		OUTER_TEXT_SPRINT $srch(~%idx%~) ~%dir%~
+		OUTER_SET idx += 1
+	END
+	
+	ACTION_READLN response
+	
+	OUTER_TEXT_SPRINT directory $srch(~%response%~)
+	
+	ACTION_IF IS_AN_INT response BEGIN
+		ACTION_IF response = 0 THEN BEGIN
+			OUTER_SET ok = 1
+		END ELSE ACTION_IF VARIABLE_IS_SET directory BEGIN
+			OUTER_TEXT_SPRINT directory EVALUATE_BUFFER ~%directory%~
+			OUTER_SET ok = 1
+		END
+	END
+END
+
+ACTION_IF response > 0 BEGIN
+	INCLUDE ~save-reader/save-reader.tpa~
+END
