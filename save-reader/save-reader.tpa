@@ -9,7 +9,7 @@ BEGIN
 END
 
 DEFINE_PATCH_FUNCTION printStats
-	RET result
+	RET result deathInformationFile
 BEGIN
 	READ_LONG offset + 0x0104 numKills
 	PATCH_IF numKills > 0 BEGIN
@@ -50,16 +50,86 @@ BEGIN
 	
 		perXp = totalXp * 100 / totXp
 		perKi = numKills * 100 / totKills
+
+		PATCH_IF deathCounter = 1 THEN BEGIN
+			TEXT_SPRINT deathInfo ~~
+		END ELSE BEGIN
+			TEXT_SPRINT deathInfo ~Not in the file!~
+			INNER_PATCH_SAVE deathInformationFile ~%deathInformationFile%~ BEGIN
+				REPLACE_TEXTUALLY ~%MNL%~ ~~
+				READ_ASCII 0 fileContents (BUFFER_LENGTH)
+				QUOTE nameQuoted ~%name%~
+				// Reminder: STRING_CONTAINS_EQUALS actually returns the opposite of what it says on the tin.
+				PATCH_IF (~%fileContents%~ STRING_CONTAINS_REGEXP ~^%nameQuoted%=\(.*\)$~) THEN BEGIN
+					INSERT_2DA_ROW 1 0 ~%name%=Not initialized!~
+				END
+				REPLACE_EVALUATE ~^%nameQuoted%=\(.*\)$~ BEGIN
+					INNER_PATCH_SAVE deathInfo ~%MATCH1%~ BEGIN
+						REPLACE_TEXTUALLY ~[%WNL%]~ ~~
+					END
+					PATCH_IF deathCounter = 3 THEN BEGIN
+						TEXT_SPRINT ok ~~
+						WHILE !(~%ok%~ STRING_EQUAL_CASE ~N~) BEGIN
+							WHILE !(~%ok%~ STRING_EQUAL_CASE ~Y~) && !(~%ok%~ STRING_EQUAL_CASE ~N~) BEGIN
+								PATCH_PRINT ~%name%'s deaths: %deathInfo%. Update? [Y]es or [N]o~
+								PATCH_READLN ok
+							END
+							PATCH_IF ~%ok%~ STRING_EQUAL_CASE ~Y~ THEN BEGIN
+								TEXT_SPRINT ok ~~
+								PATCH_PRINT ~Input %name%'s new death information~
+								PATCH_READLN deathInfo
+							END
+						END
+					END
+				END ~%name%=%deathInfo%~
+			END
+			TEXT_SPRINT deathInfo ~Deaths: %deathInfo%
+~
+		END
+
 	TEXT_SPRINT result ~%result%
 %name%:
 Kills: %numKills% (%perKi%% of party)
-Deaths: KEEP COUNT MANUALLY!
-XP Gain: %totalXp% (%perXp%% of party)
+%deathInfo%XP Gain: %totalXp% (%perXp%% of party)
 Best Kill: %nameMostPowerful% (%xpMostPowerful% XP)
 Favorite Weapon: %favWeap%
 Favorite Spell: %favSpell%
 ~
 	END
+END
+
+
+OUTER_SET deathCounter = 0
+
+OUTER_WHILE !deathCounter BEGIN
+	PRINT ~~
+	PRINT ~Choose how to deal with death counters:~
+	PRINT ~~
+	PRINT ~1 => Do not print death counters~
+	PRINT ~2 => Print death counters, do not update~
+	PRINT ~3 => Print death counters, update them~
+
+	ACTION_READLN response
+	
+	ACTION_IF IS_AN_INT response BEGIN
+		ACTION_IF response > 0 && response < 4 THEN BEGIN
+			OUTER_SET deathCounter = response
+		END
+	END
+END
+
+ACTION_IF deathCounter != 1 THEN BEGIN
+	COPY - ~%directory%/baldur.sav~ ~.../throwAwayFakeFile.sav~
+		EDIT_SAV_FILE 9 ADD_IF_MISSING tb#srdea.txt BEGIN
+			PATCH_IF BUFFER_LENGTH = 0 THEN BEGIN
+				INSERT_2DA_ROW 0 0 ~111~
+				INSERT_2DA_ROW 0 0 ~222~
+				INSERT_2DA_ROW 0 0 ~333~
+			END
+			READ_ASCII 0 origDeathInformationFile (BUFFER_LENGTH)
+			READ_ASCII 0 deathInformationFile (BUFFER_LENGTH)
+		END
+	BUT_ONLY
 END
 
 COPY ~%directory%/baldur.gam~ ~%directory%/baldur.gam~
@@ -76,7 +146,7 @@ COPY ~%directory%/baldur.gam~ ~%directory%/baldur.gam~
 	
 	TEXT_SPRINT result ~~
 	PHP_EACH npcsInParty AS idx => offset BEGIN
-		LPF printStats RET result END
+		LPF printStats RET result deathInformationFile END
 	END
 	TEXT_SPRINT result ~%result%
 
@@ -84,9 +154,19 @@ Previously in the party:
 
 ~
 	PHP_EACH npcsNotInParty AS idx => offset BEGIN
-		LPF printStats RET result END
+		LPF printStats RET result deathInformationFile END
 	END
 BUT_ONLY
+
+ACTION_IF deathCounter = 3 && !(~%deathInformationFile%~ STRING_EQUAL ~%origDeathInformationFile%~) BEGIN
+	COPY + ~%directory%/baldur.sav~ ~%directory%/baldur.sav~
+		EDIT_SAV_FILE 9 ADD_IF_MISSING tb#srdea.txt BEGIN
+			DELETE_BYTES 0 BUFFER_LENGTH
+			INSERT_BYTES 0 (STRING_LENGTH ~%deathInformationFile%~)
+			WRITE_ASCIIE 0 ~%deathInformationFile%~ (STRING_LENGTH ~%deathInformationFile%~)
+		END
+	BUT_ONLY
+END
 
 <<<<<<<< empty
 %result%>>>>>>>>

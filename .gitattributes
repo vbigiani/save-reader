@@ -1,1 +1,8 @@
 *.exe binary
+
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# WeiDU/IE
+*.tp2 text
+*.tpa text
